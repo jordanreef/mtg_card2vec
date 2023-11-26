@@ -23,13 +23,12 @@ def gen_training_pairs(game_data_csv, num_decks, sample):
 
     Args:
         game_data_csv (file) : open file context manager of a game data .csv file
-        decks (int)          : maximum number of decks to sample from game data .csv file
+        num_decks (int)      : maximum number of decks to sample from game data .csv file
         sample (float)       : hyperparameter controlling the strength of subsampling
 
     Return:
         card_names (list<tuple>)  : human-friendly card names packaged with their idx in the one-hot encoding
         training_pairs (Tensor)   : (N, 2, D) tensor, of N D-sized training pairs
-
     """
     csv_reader = csv.reader(game_data_csv)
     header = next(csv_reader)
@@ -73,6 +72,7 @@ def gen_training_pairs(game_data_csv, num_decks, sample):
     header = next(csv_reader)
 
     decks_found = 0
+
     draft_id = None
     for game in csv_reader:
         # Check the draft ID -- we only select one game (i.e. one deck) per draft
@@ -107,7 +107,6 @@ def deck_counts_to_one_hots(deck_counts: list):
 
     Arg:
         deck_counts (list) : list of deck card counts, like [0, 2, 1, 0, 0, 5, 0, ...]
-
     Returns:
         one_hots (Tensor)  : Tensor of shape (N, D) -- with N being deck size and D set size
     """
