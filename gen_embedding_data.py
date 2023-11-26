@@ -1,5 +1,5 @@
 """
-Local (non-versioned) script runner
+Datasets sourced from: https://www.17lands.com/public_datasets
 """
 
 import pickle
