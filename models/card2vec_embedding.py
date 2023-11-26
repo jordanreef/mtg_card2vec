@@ -9,6 +9,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from torch.utils.data import DataLoader
+
 
 class Card2VecFFNN(nn.Module):
     """
@@ -25,17 +27,15 @@ class Card2VecFFNN(nn.Module):
         self.embedding = nn.Embedding(set_size, embedding_dim)
         self.hidden = nn.Linear(embedding_dim, set_size)
 
-        self.criterion = nn.CrossEntropyLoss()
-
     def forward(self, target):
         embed_target = self.embedding(target)
         out = self.hidden(embed_target)
         return out
 
 
-def train_card2vec_embedding(set_size, embedding_dim,  # vocab size and embedding dim
-                             training_corpus,          # training set of training pairs
-                             epochs, learning_rate):   # training / optimizer hyperparameters
+def train_card2vec_embedding(set_size, embedding_dim,              # vocab size and embedding dim
+                             training_corpus,                      # training set of training pairs
+                             epochs, learning_rate, batch_size):   # training / optimizer hyperparameters
     """
     Creates an instance of a Card2VecFFN model, loads data from the supplied training_corpus, and learns card embeddings
 
@@ -45,8 +45,40 @@ def train_card2vec_embedding(set_size, embedding_dim,  # vocab size and embeddin
         training_corpus (Tensor) : (N, 2, D) large Tensor of training samples
         epochs (int)             : number of training epochs, hyperparameter
         learning_rate (float)    : SGD learning rate, hyperparameter
+        batch_size (int)         : training batch size, hyperparameter
 
     Return:
         card_embeddings : return embedding weights after training
     """
-    pass
+    # Init model and optimizer
+    model = Card2VecFFNN(set_size, embedding_dim)
+    optimizer = optim.SGD(model.parameters(), lr=learning_rate)
+    criterion = nn.CrossEntropyLoss()
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+
+    data_loader = DataLoader(training_corpus, batch_size=batch_size, shuffle=True)
+
+    for epoch in range(epochs):
+        total_loss = 0.0
+
+        for it, batch in enumerate(data_loader):
+            # Split targets and contexts -- convert one-hot representations to appropriate types for calcs
+            targets = batch[:, 0, :].int().to(device)
+            contexts = batch[:, 1, :].long().to(device)
+
+            optimizer.zero_grad()
+            out = model(targets)
+
+            loss = criterion(out, contexts)
+            loss.backward()  # Backprop
+            optimizer.step()
+
+            total_loss += loss.item()
+
+            print(f"Batch {it} loss: {loss.item()}")
+
+        print(f"Epoch {epoch} -- Total Loss: {total_loss}")
+
+    return model.embedding.weight.data
