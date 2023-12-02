@@ -5,7 +5,7 @@ Datasets sourced from: https://www.17lands.com/public_datasets
 import pickle
 import torch
 
-from seventeen_lands_preprocessor import gen_training_pairs
+from seventeen_lands_preprocessor import gen_card_names, gen_training_pairs
 
 if __name__ == "__main__":
 
@@ -18,7 +18,8 @@ if __name__ == "__main__":
         print(f"Extracting training pairs for {set}")
 
         with open(f"datasets/game_data_public.{set}.PremierDraft.csv", "r") as csv_file:
-            card_names, training_pairs = gen_training_pairs(csv_file, deck_num, sample)
+            card_names = gen_card_names(csv_file)
+            training_pairs = gen_training_pairs(csv_file, deck_num, sample)
 
         # Save tensor
         torch.save(training_pairs, f"datasets/training_pairs_{set}.pt")
@@ -35,7 +36,8 @@ if __name__ == "__main__":
         print(f"Extracting training pairs for {set}")
 
         with open(f"datasets/game_data_public.{set}.PremierDraft.csv", "r") as csv_file:
-            card_names, training_pairs = gen_training_pairs(csv_file, deck_num, sample)
+            card_names = gen_card_names(csv_file)
+            training_pairs = gen_training_pairs(csv_file, deck_num, sample)
 
         # Save tensor
         torch.save(training_pairs, f"datasets/training_pairs_{set}.pt")
@@ -52,7 +54,8 @@ if __name__ == "__main__":
         print(f"Extracting training pairs for {set}")
 
         with open(f"datasets/game_data_public.{set}.PremierDraft.csv", "r") as csv_file:
-            card_names, training_pairs = gen_training_pairs(csv_file, deck_num, sample)
+            card_names = gen_card_names(csv_file)
+            training_pairs = gen_training_pairs(csv_file, deck_num, sample)
 
         # Save tensor
         torch.save(training_pairs, f"datasets/training_pairs_{set}.pt")
