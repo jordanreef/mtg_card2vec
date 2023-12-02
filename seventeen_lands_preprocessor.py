@@ -16,6 +16,29 @@ import numpy as np
 import torch
 
 
+def gen_card_names(game_data_csv):
+    """ Generates two dicts, for converting between card names and one-hot vectors
+
+    Return:
+        name_to_one_hot : keys are card names, values are one-hot vector Tensors
+        idx_to_names    : keys are integer indexes within the one-hot encoding, values are card names
+    """
+    csv_reader = csv.reader(game_data_csv)
+    header = next(csv_reader)
+
+    card_names = [s[len(re.match("^deck_", s).group(0)):] for s in header if re.match("^deck_", s) is not None]
+
+    def _one_hot(idx):
+        vec = torch.zeros(len(card_names), dtype=torch.bool)
+        vec[idx] = 1
+        return vec
+
+    name_to_one_hot = {name: _one_hot(idx) for idx, name in enumerate(card_names)}
+    idx_to_name = {idx: name for idx, name in enumerate(card_names)}
+
+    return name_to_one_hot, idx_to_name
+
+
 def gen_training_pairs(game_data_csv, num_decks, sample):
     """
     Generates a list of (input_card, output_card) one-hot training pairs from a 17Lands "Game Data" object. Pairs are to
@@ -27,14 +50,12 @@ def gen_training_pairs(game_data_csv, num_decks, sample):
         sample (float)       : hyperparameter controlling the strength of subsampling
 
     Return:
-        card_names (list<tuple>)  : human-friendly card names packaged with their idx in the one-hot encoding
         training_pairs (Tensor)   : (N, 2, D) tensor, of N D-sized training pairs
     """
     csv_reader = csv.reader(game_data_csv)
     header = next(csv_reader)
 
     # Extract indices of "deck_" columns -- these contain info on which cards were present in the deck
-    card_names = [s[len(re.match("^deck_", s).group(0)):] for s in header if re.match("^deck_", s) is not None]
     deck_idxs = [idx for idx, s in enumerate(header) if re.match("^deck_", s) is not None]
 
     ######################
@@ -97,7 +118,7 @@ def gen_training_pairs(game_data_csv, num_decks, sample):
             if decks_found >= num_decks:
                 break
 
-    return list(enumerate(card_names)), torch.stack(training_pairs)
+    return torch.stack(training_pairs)
 
 
 def deck_counts_to_one_hots(deck_counts: list):
