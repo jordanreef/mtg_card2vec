@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from torch.nn.functional import one_hot
 from torch.utils.data import DataLoader, TensorDataset
 from evals.card2vec_downstream_tasks import Card2VecEmbeddingEval
 
@@ -27,10 +28,11 @@ class Card2VecFFNN(nn.Module):
         super(Card2VecFFNN, self).__init__()
         self.embedding = nn.Embedding(set_size, embedding_dim)
         self.hidden = nn.Linear(embedding_dim, set_size)
+        self.softmax = nn.Softmax(dim=1)
 
     def forward(self, target):
         embed_target = self.embedding(target)
-        out = self.hidden(embed_target)
+        out = self.softmax(self.hidden(embed_target))
         return out
 
 
@@ -62,11 +64,14 @@ def train_card2vec_embedding(set_size, embedding_dim,              # vocab size 
 
     # Get one-hot name labels -- set Tensors to proper device / dtype
     name_to_1h, _ = card_labels
-    for k, val in name_to_1h.items():
-        name_to_1h[k] = val.to(device, dtype=torch.float)
 
-    dataset = TensorDataset(training_corpus[:, 0, :].long().to(device),
-                            training_corpus[:, 1, :].long().to(device))
+    # Target cards (i.e. card vector being learned per iteration)
+    targets = training_corpus[:, 0].to(device)
+
+    # Context cards -- Need to one-hot encode contexts for use in CE Loss
+    contexts = one_hot(training_corpus[:, 1].to(dtype=torch.int64)).to(device, dtype=torch.float)
+
+    dataset = TensorDataset(targets, contexts)
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     for epoch in range(epochs):
@@ -92,11 +97,13 @@ def train_card2vec_embedding(set_size, embedding_dim,              # vocab size 
 
         eval = Card2VecEmbeddingEval(model.embedding.weight.data)
         close_dist, close_sim = eval.eval_distances(
-            name_to_1h["Imperial Oath"], name_to_1h["Imperial Subduer"]  # Should be similar
+            torch.tensor(name_to_1h["Imperial Oath"]).to(device),
+            torch.tensor(name_to_1h["Imperial Subduer"]).to(device)  # Should be similar
         )
 
         far_dist, far_sim = eval.eval_distances(
-            name_to_1h["Imperial Oath"], name_to_1h["Skyswimmer Koi"]    # Should be less similar
+            torch.tensor(name_to_1h["Imperial Oath"]).to(device),
+            torch.tensor(name_to_1h["Skyswimmer Koi"]).to(device)    # Should be less similar
         )
 
         print(f"Clo calcs -- dist: {close_dist:.5f}, sim: {close_sim:.5f}")

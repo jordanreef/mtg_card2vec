@@ -149,4 +149,4 @@ def subsample_deck_idxs(deck_idxs, probs):
     subsample_mask = torch.bernoulli(probs[deck_idxs])
     subsample = np.array(deck_idxs)[np.array([binary.item() for binary in subsample_mask.to(dtype=bool)])]
 
-    return torch.Tensor(subsample).to(dtype=torch.int16)
+    return torch.Tensor(subsample).to(dtype=torch.int)
