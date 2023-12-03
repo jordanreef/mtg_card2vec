@@ -9,7 +9,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, TensorDataset
+from evals.card2vec_downstream_tasks import Card2VecEmbeddingEval
 
 
 class Card2VecFFNN(nn.Module):
@@ -34,7 +35,7 @@ class Card2VecFFNN(nn.Module):
 
 
 def train_card2vec_embedding(set_size, embedding_dim,              # vocab size and embedding dim
-                             training_corpus,                      # training set of training pairs
+                             training_corpus, card_labels,         # training set of training pairs
                              epochs, learning_rate, batch_size):   # training / optimizer hyperparameters
     """
     Creates an instance of a Card2VecFFN model, loads data from the supplied training_corpus, and learns card embeddings
@@ -43,6 +44,7 @@ def train_card2vec_embedding(set_size, embedding_dim,              # vocab size 
         set_size (int)           : size of the training 'vocabulary' (i.e. len of the one-hot encodings)
         embedding_dim (int)      : embedding size, hyperparameter
         training_corpus (Tensor) : (N, 2, D) large Tensor of training samples
+        card_labels (tuple)      : tuple of 2 dicts containing name labels for the one-hot embedding
         epochs (int)             : number of training epochs, hyperparameter
         learning_rate (float)    : SGD learning rate, hyperparameter
         batch_size (int)         : training batch size, hyperparameter
@@ -52,21 +54,28 @@ def train_card2vec_embedding(set_size, embedding_dim,              # vocab size 
     """
     # Init model and optimizer
     model = Card2VecFFNN(set_size, embedding_dim)
-    optimizer = optim.SGD(model.parameters(), lr=learning_rate)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
 
-    data_loader = DataLoader(training_corpus, batch_size=batch_size, shuffle=True)
+    # Get one-hot name labels -- set Tensors to proper device / dtype
+    name_to_1h, _ = card_labels
+    for k, val in name_to_1h.items():
+        name_to_1h[k] = val.to(device, dtype=torch.float)
+
+    dataset = TensorDataset(training_corpus[:, 0, :].long().to(device),
+                            training_corpus[:, 1, :].long().to(device))
+    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     for epoch in range(epochs):
         total_loss = 0.0
 
         for it, batch in enumerate(data_loader):
             # Split targets and contexts -- convert one-hot representations to appropriate types for calcs
-            targets = batch[:, 0, :].int().to(device)
-            contexts = batch[:, 1, :].long().to(device)
+            targets = batch[0]
+            contexts = batch[1]
 
             optimizer.zero_grad()
             out = model(targets)
@@ -77,8 +86,22 @@ def train_card2vec_embedding(set_size, embedding_dim,              # vocab size 
 
             total_loss += loss.item()
 
-            print(f"Batch {it} loss: {loss.item()}")
+            # print(f"Batch {it} loss: {loss.item()}")
 
-        print(f"Epoch {epoch} -- Total Loss: {total_loss}")
+        # Evaluate some downstream tasks each epoch
+
+        eval = Card2VecEmbeddingEval(model.embedding.weight.data)
+        close_dist, close_sim = eval.eval_distances(
+            name_to_1h["Imperial Oath"], name_to_1h["Imperial Subduer"]  # Should be similar
+        )
+
+        far_dist, far_sim = eval.eval_distances(
+            name_to_1h["Imperial Oath"], name_to_1h["Skyswimmer Koi"]    # Should be less similar
+        )
+
+        print(f"Clo calcs -- dist: {close_dist:.5f}, sim: {close_sim:.5f}")
+        print(f"Far calcs -- dist: {far_dist:.5f}, sim: {far_sim:.5f}")
+
+        print(f"Epoch {epoch} -- Total Loss: {total_loss}\n")
 
     return model.embedding.weight.data
