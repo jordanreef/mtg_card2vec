@@ -28,15 +28,10 @@ def gen_card_names(game_data_csv):
 
     card_names = [s[len(re.match("^deck_", s).group(0)):] for s in header if re.match("^deck_", s) is not None]
 
-    def _one_hot(idx):
-        vec = torch.zeros(len(card_names), dtype=torch.bool)
-        vec[idx] = 1
-        return vec
-
-    name_to_one_hot = {name: _one_hot(idx) for idx, name in enumerate(card_names)}
+    name_to_idx = {name: idx for idx, name in enumerate(card_names)}
     idx_to_name = {idx: name for idx, name in enumerate(card_names)}
 
-    return name_to_one_hot, idx_to_name
+    return name_to_idx, idx_to_name
 
 
 def gen_training_pairs(game_data_csv, num_decks, sample):
@@ -50,7 +45,7 @@ def gen_training_pairs(game_data_csv, num_decks, sample):
         sample (float)       : hyperparameter controlling the strength of subsampling
 
     Return:
-        training_pairs (Tensor)   : (N, 2, D) tensor, of N D-sized training pairs
+        training_pairs (Tensor)   : (N, 2) N training pairs
     """
     csv_reader = csv.reader(game_data_csv)
     header = next(csv_reader)
@@ -104,44 +99,40 @@ def gen_training_pairs(game_data_csv, num_decks, sample):
             deck = [int(float(game[i])) for i in deck_idxs]
 
             # Generate one-hot encodings for each deck
-            one_hots = deck_counts_to_one_hots(deck)
+            deck_list = deck_counts_to_idxs(deck)
 
             # Apply subsampling
-            one_hots = subsample_one_hots(one_hots, subsample_probs)
+            deck_list = subsample_deck_idxs(deck_list, subsample_probs)
 
             # Generate training pairs using subsampled deck lists
-            for pair in itertools.combinations(one_hots, 2):
+            for pair in itertools.combinations(deck_list, 2):
                 training_pairs.append(torch.stack(pair))
 
             decks_found += 1
-
             if decks_found >= num_decks:
                 break
 
     return torch.stack(training_pairs)
 
 
-def deck_counts_to_one_hots(deck_counts: list):
+def deck_counts_to_idxs(deck_counts: list):
     """
-    Utility function that converts a list of card counts (as contained in 17Lands Game Data) to a a list of one-hot
-    encodings.
+    Utility function that converts a list of card counts (as contained in 17Lands Game Data) to a list of indexes (i.e.
+    one-hot encodings).
 
     Arg:
         deck_counts (list) : list of deck card counts, like [0, 2, 1, 0, 0, 5, 0, ...]
     Returns:
-        one_hots (Tensor)  : Tensor of shape (N, D) -- with N being deck size and D set size
+        one_hots (list)    : ~40-element list of card indices in their 'one-hot' set encoding
     """
-    set_size = len(deck_counts)
-    one_hots = []
+    deck_idxs = []
     for idx, val in enumerate(deck_counts):
         for c in range(val):
-            vec = torch.zeros(set_size, dtype=torch.bool)
-            vec[idx] = 1
-            one_hots.append(vec)
-    return torch.stack(one_hots, dim=0)
+            deck_idxs.append(idx)
+    return deck_idxs
 
 
-def subsample_one_hots(one_hot_encoding, probs):
+def subsample_deck_idxs(deck_idxs, probs):
     """
     Utility function that subsamples entries of a one-hot encoding based on probabilities contained in probs. The
     subsampling scheme follows the method laid out in Mikolov et al. in which indvidual tokens are selected based on
@@ -152,11 +143,10 @@ def subsample_one_hots(one_hot_encoding, probs):
     and Forest) much less frequent.
 
     Args:
-        one_hot_encoding (Tensor) : (N, D) Tensor of "raw" one-hot vectors -- essentially a ~40 card deck-list
-        probs (Tensor)            : (D,) Tensor of probabilities for each token in the 'vocab' (i.e. set)
+        deck_idxs (list)   : (N,) "Raw" decklist -- a (usually) 40-element list of card indexes
+        probs (Tensor)     : (D,) Tensor of probabilities for each token in the 'vocab' (i.e. set)
     """
-    mask = torch.bernoulli(probs.unsqueeze(0).expand_as(one_hot_encoding)).to(one_hot_encoding.dtype)
-    subsample = one_hot_encoding * mask
-    subsample = subsample[torch.any(subsample, dim=1)]  # Only return rows that contain a "True" value
+    subsample_mask = torch.bernoulli(probs[deck_idxs])
+    subsample = np.array(deck_idxs)[np.array([binary.item() for binary in subsample_mask.to(dtype=bool)])]
 
-    return subsample
+    return torch.Tensor(subsample).to(dtype=torch.int)
