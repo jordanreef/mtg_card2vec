@@ -54,6 +54,9 @@ def train_card2vec_embedding(set_size, embedding_dim,              # vocab size 
     Return:
         card_embeddings : return embedding weights after training
     """
+
+    print("Initializing model...")
+
     # Init model and optimizer
     model = Card2VecFFNN(set_size, embedding_dim)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -65,6 +68,8 @@ def train_card2vec_embedding(set_size, embedding_dim,              # vocab size 
     # Get one-hot name labels -- set Tensors to proper device / dtype
     name_to_1h, _ = card_labels
 
+    print("Loading training data...")
+
     # Target cards (i.e. card vector being learned per iteration)
     targets = training_corpus[:, 0].to(device)
 
@@ -73,6 +78,8 @@ def train_card2vec_embedding(set_size, embedding_dim,              # vocab size 
 
     dataset = TensorDataset(targets, contexts)
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+    print("Starting training...")
 
     for epoch in range(epochs):
         total_loss = 0.0
@@ -95,16 +102,30 @@ def train_card2vec_embedding(set_size, embedding_dim,              # vocab size 
 
         # Evaluate some downstream tasks each epoch
 
+        # WOE
         eval = Card2VecEmbeddingEval(model.embedding.weight.data)
+
         close_dist, close_sim = eval.eval_distances(
-            torch.tensor(name_to_1h["Imperial Oath"]).to(device),
-            torch.tensor(name_to_1h["Imperial Subduer"]).to(device)  # Should be similar
+            torch.tensor(name_to_1h["Hopeful Vigil"]).to(device),
+            torch.tensor(name_to_1h["Stockpiling Celebrant"]).to(device)  # Should be similar
         )
 
         far_dist, far_sim = eval.eval_distances(
-            torch.tensor(name_to_1h["Imperial Oath"]).to(device),
-            torch.tensor(name_to_1h["Skyswimmer Koi"]).to(device)    # Should be less similar
+            torch.tensor(name_to_1h["Stockpiling Celebrant"]).to(device),
+            torch.tensor(name_to_1h["Titanic Growth"]).to(device)    # Should be less similar
         )
+
+        # NEO
+        # eval = Card2VecEmbeddingEval(model.embedding.weight.data)
+        # close_dist, close_sim = eval.eval_distances(
+        #     torch.tensor(name_to_1h["Imperial Oath"]).to(device),
+        #     torch.tensor(name_to_1h["Imperial Subduer"]).to(device)  # Should be similar
+        # )
+        #
+        # far_dist, far_sim = eval.eval_distances(
+        #     torch.tensor(name_to_1h["Imperial Oath"]).to(device),
+        #     torch.tensor(name_to_1h["Skyswimmer Koi"]).to(device)    # Should be less similar
+        # )
 
         print(f"Clo calcs -- dist: {close_dist:.5f}, sim: {close_sim:.5f}")
         print(f"Far calcs -- dist: {far_dist:.5f}, sim: {far_sim:.5f}")

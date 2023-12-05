@@ -23,7 +23,7 @@ class Card2VecEmbeddingEval(object):
         _a = F.embedding(a, weight=self.embed_weights)
         _b = F.embedding(b, weight=self.embed_weights)
 
-        dist = torch.sqrt(torch.sum(torch.pow(_a - _b, 2)))  # Euclidean distance
-        sim = F.cosine_similarity(_a, _b, dim=0).item()      # Cosine similarity
+        dist = torch.norm(_a - _b, p=2)                  # Euclidean distance
+        sim = F.cosine_similarity(_a, _b, dim=0).item()  # Cosine similarity
 
         return dist, sim
