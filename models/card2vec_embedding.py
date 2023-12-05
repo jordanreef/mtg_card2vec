@@ -36,9 +36,9 @@ class Card2VecFFNN(nn.Module):
         return out
 
 
-def train_card2vec_embedding(set_size, embedding_dim,              # vocab size and embedding dim
-                             training_corpus, card_labels,         # training set of training pairs
-                             epochs, learning_rate, batch_size):   # training / optimizer hyperparameters
+def train_card2vec_embedding(set_size, embedding_dim,                     # vocab size and embedding dim
+                             training_corpus, card_labels,                # training set of training pairs
+                             epochs, learning_rate, batch_size, device):  # training / optimizer hyperparameters
     """
     Creates an instance of a Card2VecFFN model, loads data from the supplied training_corpus, and learns card embeddings
 
@@ -50,9 +50,10 @@ def train_card2vec_embedding(set_size, embedding_dim,              # vocab size 
         epochs (int)             : number of training epochs, hyperparameter
         learning_rate (float)    : SGD learning rate, hyperparameter
         batch_size (int)         : training batch size, hyperparameter
+        device (torch.device)    : device to perform training on
 
     Return:
-        card_embeddings : return embedding weights after training
+        card_embeddings (Tensor) : return embedding weights after training
     """
 
     print("Initializing model...")
@@ -62,7 +63,7 @@ def train_card2vec_embedding(set_size, embedding_dim,              # vocab size 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss()
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
 
     # Get one-hot name labels -- set Tensors to proper device / dtype
@@ -99,36 +100,6 @@ def train_card2vec_embedding(set_size, embedding_dim,              # vocab size 
             total_loss += loss.item()
 
             # print(f"Batch {it} loss: {loss.item()}")
-
-        # Evaluate some downstream tasks each epoch
-
-        # WOE
-        eval = Card2VecEmbeddingEval(model.embedding.weight.data)
-
-        close_dist, close_sim = eval.eval_distances(
-            torch.tensor(name_to_1h["Hopeful Vigil"]).to(device),
-            torch.tensor(name_to_1h["Stockpiling Celebrant"]).to(device)  # Should be similar
-        )
-
-        far_dist, far_sim = eval.eval_distances(
-            torch.tensor(name_to_1h["Stockpiling Celebrant"]).to(device),
-            torch.tensor(name_to_1h["Titanic Growth"]).to(device)    # Should be less similar
-        )
-
-        # NEO
-        # eval = Card2VecEmbeddingEval(model.embedding.weight.data)
-        # close_dist, close_sim = eval.eval_distances(
-        #     torch.tensor(name_to_1h["Imperial Oath"]).to(device),
-        #     torch.tensor(name_to_1h["Imperial Subduer"]).to(device)  # Should be similar
-        # )
-        #
-        # far_dist, far_sim = eval.eval_distances(
-        #     torch.tensor(name_to_1h["Imperial Oath"]).to(device),
-        #     torch.tensor(name_to_1h["Skyswimmer Koi"]).to(device)    # Should be less similar
-        # )
-
-        print(f"Clo calcs -- dist: {close_dist:.5f}, sim: {close_sim:.5f}")
-        print(f"Far calcs -- dist: {far_dist:.5f}, sim: {far_sim:.5f}")
 
         print(f"Epoch {epoch} -- Total Loss: {total_loss}\n")
 
