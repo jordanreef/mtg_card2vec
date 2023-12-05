@@ -55,11 +55,13 @@ class Card2VecEmbeddingEval(object):
 
         return sim, dist
 
-    def set_pairwise_distances(self):
+    def set_pairwise_similarities(self):
         """
-        Generates distance metrics for every card pair in a set.
+        Generates similarity metrics for every card pair in a set.
 
-        :return:
+        Return:
+            dists (dict{<tuple>: <float>}) : dict keyed by each 2-combination of indices within the embedding space,
+                                             values are the cosine similarities between each pair
         """
         N, _ = self.embed_weights.shape
 
