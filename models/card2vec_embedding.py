@@ -12,7 +12,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from torch.nn.functional import one_hot
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset, random_split
 
 from evals.card2vec_downstream_tasks import Card2VecEmbeddingEval
 
@@ -65,7 +65,7 @@ def train_card2vec_embedding(set_size, embedding_dim, set,                      
         eval_label (str)         : string to prepend to plot labels / file names
         card_pairs (list<tuple>) : list of pairs of card names -- will print similarities of pairs during training
 
-        plot (bool)              : generate training curve figures
+        plot (bool)              : save data to be used for plots (loss curves, etc.)
         plot_dir (str)           : path prefix to save plots
         plot_label (str)         : string to prepend to plot labels / file names
 
@@ -86,7 +86,7 @@ def train_card2vec_embedding(set_size, embedding_dim, set,                      
     # Get one-hot name labels -- set Tensors to proper device / dtype
     name_to_1h, _ = card_labels
 
-    print("Loading training data...")
+    print("Loading and splitting data...")
 
     # Target cards (i.e. card vector being learned per iteration)
     targets = training_corpus[:, 0].to(device)
@@ -95,19 +95,60 @@ def train_card2vec_embedding(set_size, embedding_dim, set,                      
     contexts = one_hot(training_corpus[:, 1].to(dtype=torch.int64)).to(device, dtype=torch.float)
 
     dataset = TensorDataset(targets, contexts)
-    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+    # Train-test split
+    train_size = int(0.9 * len(dataset))
+    test_size = len(dataset) - train_size
+    train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
+
+    # Train-validation split
+    train_size = int(0.9 * len(train_dataset))
+    val_size = len(train_dataset) - train_size
+    train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+    # if evals == True, will be populated with evaluation data during training
+    eval_history = {
+        "data": [],
+        "info": {
+            "set": set,
+            "embedding_dim": embedding_dim,
+            "epochs": epochs,
+            "lr": learning_rate,
+            "batch_size": batch_size,
+            "corpus_size": len(dataset)
+        }
+    }
+
+    # if plot == True, loss values are recorded to use in plots
+    loss_history = {
+        "train": [],
+        "val": [],
+        "test_loss": 0,
+        "info": {
+            "set": set,
+            "embedding_dim": embedding_dim,
+            "epochs": epochs,
+            "lr": learning_rate,
+            "batch_size": batch_size,
+            "corpus_size": len(dataset)
+        }
+    }
 
     # Main training loop
     print("Starting training...")
 
-    eval_history = []  # if evals == True, will be populated with evaluation data during training
-    loss_history = []  # if plot == True, loss values are recorded to use in plots
-
     for epoch in range(epochs):
         """ ___ START EPOCH ___ """
-        total_loss = 0.0
 
-        for it, batch in enumerate(data_loader):
+        """ ___ Training ___ """
+        train_loss = 0.0
+        model.train()  # Model to training mode
+
+        for it, batch in enumerate(train_loader):
             # Split targets and contexts -- convert one-hot representations to appropriate types for calcs
             targets = batch[0]
             contexts = batch[1]
@@ -119,7 +160,21 @@ def train_card2vec_embedding(set_size, embedding_dim, set,                      
             loss.backward()  # Backprop
             optimizer.step()
 
-            total_loss += loss.item()
+            train_loss += loss.item()
+        """ ___ Training End ___ """
+
+        """ ___ Validation ___ """
+        val_loss = 0.0
+        model.eval()  # Model to evaluate mode
+
+        with torch.no_grad():
+            for it, batch in enumerate(val_loader):
+                targets = batch[0]
+                context = batch[1]
+
+                val_out = model(targets)
+                val_loss += criterion(val_out, context).item()
+        """ ___ Validation End ___ """
 
         # Monitor similarities of particular sets of card vectors during training
         if card_pairs is not None:
@@ -129,26 +184,42 @@ def train_card2vec_embedding(set_size, embedding_dim, set,                      
 
         # Generate evaluation data to be analyzed later
         if evals:
-            c2v_eval = Card2VecEmbeddingEval(model.embedding.weight.data, device, set)
-            eval_history.append(
+            c2v_eval = Card2VecEmbeddingEval(model.embedding.weight.data, set, device)
+            eval_history["data"].append(
                 c2v_eval.set_pairwise_similarities()  # Append similarities for every pair of card vectors
             )
 
         if plot:
-            loss_history.append(total_loss)
+            loss_history["train"].append(train_loss / len(train_dataset))
+            loss_history["val"].append(val_loss / len(val_dataset))
 
-        print(f"Epoch {epoch} -- Total Loss: {total_loss}\n")
+        print(f"Epoch {epoch} -- Train Loss: {train_loss / len(train_dataset)}")
+        print(f"Epoch {epoch} -- Valid Loss: {val_loss / len(val_dataset)}\n")
         """ ___ END EPOCH ___"""
+
+    """ ___ Testing ___ """
+    model.eval()  # Model to evaluation mode
+    with torch.no_grad():
+        test_loss = 0.0
+        for it, batch in enumerate(test_loader):
+            targets = batch[0]
+            contexts = batch[1]
+
+            test_out = model(targets)
+            test_loss += criterion(test_out, contexts).item()
+
+    if plot:
+        loss_history["test_loss"] = test_loss / len(test_dataset)
+    """ ___ Testing End ___"""
 
     # Save evaluation metrics
     if evals:
         with open(f"{eval_dir}/{eval_label}_pairwise_sims.pkl", "wb") as pkl_file:
             pickle.dump(eval_history, pkl_file)
 
-    # Generate plots
+    # Save plotting data
     if plot:
-        # TODO plot loss curves
-        # TODO plot similarity curves
-        pass
+        with open(f"{plot_dir}/{plot_label}_loss_data.pkl", "wb") as pkl_file:
+            pickle.dump(loss_history, pkl_file)
 
     return model.embedding.weight.data
