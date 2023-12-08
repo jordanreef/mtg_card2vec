@@ -4,6 +4,8 @@ Set of functions for performing some downstream task evaluations on the various 
 import torch
 import torch.nn.functional as F
 
+import numpy as np
+
 from itertools import combinations
 
 
@@ -71,3 +73,29 @@ class Card2VecEmbeddingEval(object):
         }
 
         return dists
+
+    def eval_run_statistics(self, sims):
+        """
+        Generates useful summary statistics from a training evaluation dict
+
+        Arguments:
+            sims (dict) : saved eval dict object
+        """
+        top5_over_epochs = []
+        bottom5_over_epochs = []
+
+        for epoch in sims["data"]:
+            e_data = np.array(list(epoch.items()))
+            cos_sims_argsort = np.argsort(e_data[:, 1, 0])
+
+            # Top 5 most similar pair
+            top5 = cos_sims_argsort[-5:]
+            top5_tups = [tuple(r) for r in e_data[top5][:, 0]]
+            top5_over_epochs.append(top5_tups)
+
+            # Top 5 least similar pairs
+            bottom5 = cos_sims_argsort[:5]
+            bottom5_tups = [tuple(r) for r in e_data[bottom5][:, 0]]
+            bottom5_over_epochs.append(bottom5_tups)
+
+        return top5_over_epochs, bottom5_over_epochs

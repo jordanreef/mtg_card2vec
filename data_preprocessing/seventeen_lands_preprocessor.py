@@ -47,6 +47,60 @@ def gen_training_pairs(game_data_csv, num_decks, sample):
     Return:
         training_pairs (Tensor)   : (N, 2) N training pairs
     """
+
+    # Get subsampling probabilities
+    # Subsampling rates are proportional to card occurrences in the corpus
+    card_probs = generate_card_probs(game_data_csv, num_decks)
+    subsample_probs = torch.tensor((np.sqrt(card_probs / sample) + 1) * (sample / card_probs))
+    subsample_probs = torch.clamp(subsample_probs, 0.0, 1.0)
+
+    ##################
+    # Training pairs #
+    ##################
+
+    csv_reader = csv.reader(game_data_csv)
+    header = next(csv_reader)
+
+    # Extract indices of "deck_" columns -- these contain info on which cards were present in the deck
+    deck_idxs = [idx for idx, s in enumerate(header) if re.match("^deck_", s) is not None]
+
+    training_pairs = []
+    decks_found = 0
+
+    draft_id = None
+    for game in csv_reader:
+        # Check the draft ID -- we only select one game (i.e. one deck) per draft
+        if game[2] != draft_id:
+            # When draft ID does not equal prev draft ID we are looking at a new deck
+            draft_id = game[2]
+
+            deck = [int(float(game[i])) for i in deck_idxs]
+
+            # Generate one-hot encodings for each deck
+            deck_list = deck_counts_to_idxs(deck)
+
+            # Apply subsampling
+            deck_list = subsample_deck_idxs(deck_list, subsample_probs)
+
+            # Generate training pairs using subsampled deck lists
+            for pair in itertools.combinations(deck_list, 2):
+                training_pairs.append(torch.stack(pair))
+
+            decks_found += 1
+            if decks_found >= num_decks:
+                break
+
+    return torch.stack(training_pairs)
+
+
+def generate_card_probs(game_data_csv, num_decks):
+    """
+    Generate the probability distribution of each card in the given game data file
+
+    Args:
+        game_data_csv (file) : open file context manager for a 17lands game data .csv
+        num_decks (int)      : maximum number of decks to sample from game data .csv file
+    """
     csv_reader = csv.reader(game_data_csv)
     header = next(csv_reader)
 
@@ -75,44 +129,10 @@ def gen_training_pairs(game_data_csv, num_decks, sample):
 
     # Subsampling rates are proportional to card occurrences in the corpus
     card_probs = card_counts / np.sum(card_counts)
-    subsample_probs = torch.tensor((np.sqrt(card_probs / sample) + 1) * (sample / card_probs))
-    subsample_probs = torch.clamp(subsample_probs, 0.0, 1.0)
 
-    ##################
-    # Training pairs #
-    ##################
-    training_pairs = []
+    game_data_csv.seek(0)  # Seek to the beginning of file after extracting probs
 
-    # Reset csv_reader
-    csv_reader = csv.reader(game_data_csv)
-    header = next(csv_reader)
-
-    decks_found = 0
-
-    draft_id = None
-    for game in csv_reader:
-        # Check the draft ID -- we only select one game (i.e. one deck) per draft
-        if game[2] != draft_id:
-            # When draft ID does not equal prev draft ID we are looking at a new deck
-            draft_id = game[2]
-
-            deck = [int(float(game[i])) for i in deck_idxs]
-
-            # Generate one-hot encodings for each deck
-            deck_list = deck_counts_to_idxs(deck)
-
-            # Apply subsampling
-            deck_list = subsample_deck_idxs(deck_list, subsample_probs)
-
-            # Generate training pairs using subsampled deck lists
-            for pair in itertools.combinations(deck_list, 2):
-                training_pairs.append(torch.stack(pair))
-
-            decks_found += 1
-            if decks_found >= num_decks:
-                break
-
-    return torch.stack(training_pairs)
+    return card_probs
 
 
 def deck_counts_to_idxs(deck_counts: list):
