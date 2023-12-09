@@ -15,6 +15,9 @@ import itertools
 import numpy as np
 import torch
 
+NAME_2_ID = 0
+ID_2_NAME = 1
+
 
 def gen_card_names(game_data_csv):
     """ Generates two dicts, for converting between card names and one-hot vectors
