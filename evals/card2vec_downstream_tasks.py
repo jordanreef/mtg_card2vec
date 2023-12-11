@@ -187,3 +187,20 @@ class Card2VecEmbeddingEval(object):
             plt.show()
 
         plt.close()
+
+    def draft_pick(self, context, choices):
+        """
+        Make a draft pick! Chooses a card from among choices that maximizes the cosine similarity to a centroid
+        calculated from all currently selected cards (the 'context'). These similarities are weighted by the overall
+        power-level (winrate statistics) of each card.
+
+        Arguments:
+            context (list) :
+            choices (list) :
+
+        Return
+
+        :param context:
+        :param choices:
+        :return:
+        """

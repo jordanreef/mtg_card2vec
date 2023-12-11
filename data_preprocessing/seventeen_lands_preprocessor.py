@@ -173,3 +173,57 @@ def subsample_deck_idxs(deck_idxs, probs):
     subsample = np.array(deck_idxs)[np.array([binary.item() for binary in subsample_mask.to(dtype=bool)])]
 
     return torch.Tensor(subsample).to(dtype=torch.int)
+
+
+def scrape_gih_wr(url):
+    """ Quick little utility to scrape the GIH WR statistic from a 17Lands table. """
+    import requests
+    from bs4 import BeautifulSoup
+    from selenium import webdriver
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.common.by import By
+
+    driver = webdriver.Chrome()
+    driver.get(url)
+
+    table_present = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.TAG_NAME, "table"))
+    )
+
+    page_src = driver.page_source
+
+    driver.quit()
+
+    soup = BeautifulSoup(page_src, 'lxml')
+    table = soup.find(class_='scrolling-table')
+    header_row = table.find('tr')
+    headers = [th.text.strip() for th in header_row.find_all('th')]
+
+    try:
+        tgt_column_index = headers.index("GIH WR")
+    except ValueError:
+        print("Target column not found")
+        tgt_column_index = None
+
+    if tgt_column_index is None:
+        return None
+    else:
+        gih_wrs = []
+
+        tbody = table.find('tbody')
+        for row in tbody.find_all('tr'):
+            card_name = row.find(class_='list_card_name').text
+
+            cols = row.find_all('td')
+            gih_span = cols[tgt_column_index].find('span')
+
+            try:
+                wr = float(gih_span.text.strip().strip('%')) / 100
+            except AttributeError:
+                wr = 0.35  # A few cards are so unplayably bad that they don't have enough data and don't have a win %
+
+            gih_wrs.append((card_name, wr))
+
+        print("Break")
+        return gih_wrs
