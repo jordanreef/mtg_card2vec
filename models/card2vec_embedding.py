@@ -6,6 +6,7 @@ deck. Training pairs are subsampled combinations of each card that appear within
 """
 
 import pickle
+import timeit
 
 import torch
 import torch.nn as nn
@@ -178,13 +179,13 @@ def train_card2vec_embedding(set_size, embedding_dim, set,                      
 
         # Monitor similarities of particular sets of card vectors during training
         if card_pairs is not None:
-            c2v_eval = Card2VecEmbeddingEval(model.embedding.weight.data, device, set)
+            c2v_eval = Card2VecEmbeddingEval(model.embedding.weight.data, set, card_labels, device)
             for pair in card_pairs:
                 print(f"sim {pair[0][:7]} - {pair[1][:7]}: {c2v_eval.eval_distances(name_to_1h[pair[0]], name_to_1h[pair[1]]):4f}")
 
         # Generate evaluation data to be analyzed later
         if evals:
-            c2v_eval = Card2VecEmbeddingEval(model.embedding.weight.data, set, device)
+            c2v_eval = Card2VecEmbeddingEval(model.embedding.weight.data, set, card_labels, device)
             eval_history["data"].append(
                 c2v_eval.set_pairwise_similarities()  # Append similarities for every pair of card vectors
             )
