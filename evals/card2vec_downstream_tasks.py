@@ -6,8 +6,11 @@ import torch.nn.functional as F
 
 import numpy as np
 import pickle
+import matplotlib.pyplot as plt
 
 from itertools import combinations
+
+from sklearn.manifold import TSNE
 
 
 class Card2VecEmbeddingEval(object):
@@ -123,3 +126,64 @@ class Card2VecEmbeddingEval(object):
             var_over_epochs.append(np.var(e_data[:, 1, 0]))
 
         return top5_over_epochs, bottom5_over_epochs, mins_over_epochs, maxs_over_epochs, avg_over_epochs, var_over_epochs
+
+    def generate_tsne(self, labels, cluster_names, color_mapping, plot_label,    # Basic plot info
+                      perplexity=15.0, learning_rate='auto', random_state=1337,  # TSNE hyperparams
+                      save=False, save_dir=None):                                # filesystem / saving info
+        """
+        Generates a TSNE plot based on the embedding weights of this Card2VecEmbeddingEval.
+
+        Arguments:
+            labels (list)         : list of mapping integers; should be len(self.embed_weights)
+            cluster_names (dict0  : list of {int: str} cluster labels to appear in the plot legend
+            color_mapping (dict)  : dict of {int: color_str} mappings
+            plot_label (str)      : additional label to be included in the plot title
+
+            perplexity (float)           : relates to number of nearest neighbors -- larger datasets require larger perplexity
+            learning_rate (float or str) : t-SNE lr, too high makes data appear as an equidistant 'ball', too low makes
+                                           the data appear too densely packed
+            random_state (int)           : random seed used in t-SNE eval
+
+            save (bool)           : set to true to save the figure
+            save_dir (str)        : relative path prefix to directory in which to save plot
+        """
+        plt.clf()  # Ensure figure is clear
+
+        labels = np.array(labels)
+
+        tsne = TSNE(n_components=2, perplexity=perplexity, learning_rate=learning_rate, random_state=random_state)
+        c2v_tsne = tsne.fit_transform(self.embed_weights.cpu().numpy())
+
+        # Apply cluster colorations, plot points
+        plt.figure(figsize=(14, 10))
+        for label, color in color_mapping.items():
+            indices = labels == label
+
+            if label == 7:  # Underemphasize the 'Other' class
+                scatter = plt.scatter(c2v_tsne[indices, 0], c2v_tsne[indices, 1],
+                                      marker='.', color=color, s=200, edgecolors='black', linewidths=0.3, alpha=0.5,
+                                      label=cluster_names[label])
+            else:           # Emphasis all other classes
+                scatter = plt.scatter(c2v_tsne[indices, 0], c2v_tsne[indices, 1],
+                                      marker='.', color=color, s=400, edgecolors='black', linewidths=0.5, alpha=0.95,
+                                      label=cluster_names[label])
+
+        # Backgroudnd color
+        plt.gcf().set_facecolor('whitesmoke')
+        scatter.axes.set_facecolor('whitesmoke')
+
+        # Axes aren't really meaningful, so remove them
+        plt.xticks([])
+        plt.yticks([])
+        plt.xlabel('')
+        plt.ylabel('')
+
+        plt.title(f'card2vec t-SNE -- {plot_label}', fontweight="bold", fontsize=20)
+        plt.legend()
+
+        if save:
+            plt.savefig(f"{save_dir}/{plot_label}_tsne.png")
+        else:
+            plt.show()
+
+        plt.close()

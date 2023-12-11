@@ -15,9 +15,15 @@ def card2vec_hyper_parameter_search(set_size, set, set_data, card_names, epochs,
 
     """___ HYPER-PARAMETER GRID ___ """
 
+    # LTR GRID -- 18 runs
+    # embed_sizes = [300, 400]
+    # lrs = [0.01, 0.001, 0.0001]
+    # batch_sizes = [64, 128, 256]
+
+    # WOE GRID -- 4 runs
     embed_sizes = [300, 400]
-    lrs = [0.01, 0.001, 0.0001]
-    batch_sizes = [64, 128, 256]
+    lrs = [0.001, 0.0001]
+    batch_sizes = [128]
 
     """ ___________________________ """
 
@@ -93,11 +99,12 @@ def gather_hyperparam_run_metrics(set, card_names, eval_dir, loss_dir, weight_di
                 with open(f"{loss_dir}/{set}_{emb_size}_{lr}_{bs}_loss_data.pkl", "rb") as pkl_file:
                     losses = pickle.load(pkl_file)
 
-                    loss_norm = 256 / bs  # Loss curves saved in files need to be normalized by batch size
-                    # Batch sizes were 64, 128, and 256 -- so normalize to 256
+                    loss_norm = bs / 64  # Loss curves saved in files need to be normalized by batch size
+                    # Batch sizes were 64, 128, and 256 -- so normalize with 64
 
                     losses["train"] = np.array(losses["train"]) * loss_norm
                     losses["val"] = np.array(losses["val"]) * loss_norm
+                    losses["test_loss"] = losses["test_loss"] * loss_norm
 
                 # # Load saved embedding weights
                 with open(f"{weight_dir}/card2vec_{set}_emb-{emb_size}_epochs-20_lr-{lr}_bs-{bs}.pt", "rb") as torchfile:
