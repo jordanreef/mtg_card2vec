@@ -121,8 +121,8 @@ hard_pick_3 = {
                 "Gingerbrute", "Prophetic Prism", "Scarecrow Guide", "Crystal Grotto"]
 }
 
-draft_puzzles = [easy_pick_1, easy_pick_2, easy_pick_3,
-                 medium_pick_1, medium_pick_2, medium_pick_3,
-                 hard_pick_1, hard_pick_2, hard_pick_3]
+WOE_draft_puzzles = [easy_pick_1, easy_pick_2, easy_pick_3,
+                     medium_pick_1, medium_pick_2, medium_pick_3,
+                     hard_pick_1, hard_pick_2, hard_pick_3]
 
 # endregion

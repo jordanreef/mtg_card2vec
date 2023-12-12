@@ -12,6 +12,7 @@ from itertools import combinations
 
 from sklearn.manifold import TSNE
 
+from data_preprocessing.seventeen_lands_preprocessor import NAME_2_ID, ID_2_NAME
 
 class Card2VecEmbeddingEval(object):
     """
@@ -188,18 +189,67 @@ class Card2VecEmbeddingEval(object):
 
         plt.close()
 
-    def draft_pick(self, context, choices, winrates):
+    def draft_pick(self, context, choices, winrates, wr_lower=0.2, wr_upper=0.7):
         """
         Make a draft pick! Chooses a card from among choices that maximizes the cosine similarity to a centroid
         calculated from all currently selected cards (the 'context'). These similarities are weighted by the overall
         power-level (winrate statistics) of each card.
+
+        The winrate statistics are turned into a normalized range based on the wr_lower and wr_upper params.
 
         Arguments:
             context (list)  : list of cards (indices in the embedding) representing current card picks
             choices (list)  : list of cards (indices) -- learner chooses the best of these for their deck
             winrates (list) : winrate statistics scraped from 17Lands -- used as a prior weighting for card selection
 
+            wr_lower (float) : Lower bound of the winrate normalization range
+            wr_upper (float) : Upper bound of the winrate normalization range
+
         Return:
             choice (int) : index of chosen card within the embedding
         """
+        ctx_idxs = [self.card_names[0][name] for name in context]
+        choice_idxs = [self.card_names[0][name] for name in choices]
 
+        # Get the embeddings for each card in the context
+        ctx_embeddings = torch.stack([F.embedding(torch.tensor(idx).to(self.device), weight=self.embed_weights)
+                                      for idx in ctx_idxs]).to(self.device)
+
+        # Calculate context centroid
+        ctx_centroid = torch.mean(ctx_embeddings, dim=0)
+
+        # Get the embeddings for each card in the choices
+        choice_embeddings = [F.embedding(torch.tensor(idx).to(self.device), weight=self.embed_weights)
+                             for idx in choice_idxs]
+
+        # Get the similarity between the context centroid and each choice -- these are logits
+        sims = torch.tensor([F.cosine_similarity(ctx_centroid, ce, dim=0).item()
+                             for ce in choice_embeddings]).to(self.device)
+
+        # Take a Softmax over the similarities
+        sims = F.softmax(sims)
+
+        # Preprocess card winrates
+        _wrs = [(self.card_names[NAME_2_ID][tup[0]], tup[1]) for tup in winrates]
+        _wrs = sorted(_wrs, key=lambda x: x[0])
+        _wr_mean = np.mean([tup[1] for tup in _wrs])  # Avg winrate -- used as a default for missing datapoints later
+                                                      # This mostly applies to basic lands
+
+        # Some datapoints are missing from winrate data, so we need to fill in the gap (basic lands, mostly)
+        wrs = [None for _ in range(len(self.embed_weights))]
+        for emb_idx in range(len(self.embed_weights)):
+            if emb_idx in [tup[0] for tup in _wrs]:
+                wrs[emb_idx] = next((tup[1] for tup in _wrs if tup[0] == emb_idx))
+            else:
+                wrs[emb_idx] = _wr_mean
+        wrs = torch.tensor(wrs).to(self.device)
+
+        # Normalize card winrates to supplied range
+        wr_max = torch.max(wrs)
+        wr_min = torch.min(wrs)
+        wrs = wr_lower + (wrs - wr_min) * (wr_upper - wr_lower) / (wr_max - wr_min)
+
+        normalized_sims = torch.tensor([sims[i] * wrs[choice_idxs[i]] for i in range(len(choices))]).to(self.device)
+
+        # Return the embedding index of the best pick
+        return choice_idxs[torch.argmax(normalized_sims).item()]
