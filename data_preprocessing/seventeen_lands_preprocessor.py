@@ -86,7 +86,7 @@ def gen_training_pairs(game_data_csv, num_decks, sample):
             deck_list = subsample_deck_idxs(deck_list, subsample_probs)
 
             # Generate training pairs using subsampled deck lists
-            for pair in itertools.combinations(deck_list, 2):
+            for pair in itertools.permutations(deck_list, 2):
                 training_pairs.append(torch.stack(pair))
 
             decks_found += 1

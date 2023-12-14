@@ -273,8 +273,6 @@ class Card2VecEmbeddingEval(object):
             sims = [np.dot(ce, big_cluster) / (np.linalg.norm(ce) * np.linalg.norm(big_cluster))
                     for ce in choice_embeddings]
             sims = torch.tensor(sims).to(self.device)  # Pass back to torch
-
-            print("Break")
         else:
             raise ValueError("Invalid cluster_algo passed to draft_pick()")
 

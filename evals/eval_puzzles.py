@@ -32,15 +32,15 @@ wu_freeze = ["Frostbridge Guard", "Plunge into Winter", "Rimefur Reindeer", "Bit
              "Icewrought Sentry", "Succumb to the Cold", "Hylda of the Icy Crown", "Sharae of Numbing Depths", "Threadbind Clique"]
 
 WOE_tsne_clusters = {
-    'staples_white': staples_white,
-    'staples_blue': staples_blue,
-    'staples_black': staples_black,
-    'staples_red': staples_red,
-    'staples_green': staples_green,
-    'wr_aggro': wr_aggro,
-    'ub_faeries': ub_faeries,
-    'bg_food': bg_food,
-    'wu_freeze': wu_freeze
+    'WOE white staples': staples_white,
+    'WOE blue staples': staples_blue,
+    'WOE black staples': staples_black,
+    'WOE red staples': staples_red,
+    'WOE green staples': staples_green,
+    'WOE WR aggro': wr_aggro,
+    'WOE UB faeries': ub_faeries,
+    'WOE BG food': bg_food,
+    'WOE WU freeze': wu_freeze
 }
 
 # endregion
@@ -193,5 +193,61 @@ ltr_hard_pick_2 = {
 LTR_draft_puzzles = [ltr_easy_pick_1, ltr_easy_pick_2, ltr_easy_pick_3,
                      ltr_medium_pick_1, ltr_medium_pick_2, ltr_medium_pick_3,
                      ltr_hard_pick_1, ltr_hard_pick_2]
+
+# endregion
+
+# region NEO Draft pick puzzles
+
+neo_easy_pick_1 = {
+    'context': ["Imperial Oath"],
+    'choices': ["Selfless Samurai", "Okiba Reckoner Raid"],
+    'solutions': ["Selfless Samurai"]
+}
+
+neo_easy_pick_2 = {
+    'context': ["Selfless Samurai"],
+    'choices': ["Akki Ronin", "Greater Tanuki"],
+    'solutions': ["Akki Ronin"]
+}
+
+neo_easy_pick_3 = {
+    'context': ["Bronzeplate Boar"],
+    'choices': ["Simian Sling", "Bamboo Grove Archer"],
+    'solutions': ["Simian Sling"]
+}
+
+neo_medium_pick_1 = {
+    'context': ["Touch the Spirit Realm"],
+    'choices': ["Farewell", "Oni-Cult Anvil"],
+    'solutions': ["Farewell"]
+}
+
+neo_medium_pick_2 = {
+    'context': ["Covert Technician"],
+    'choices': ["Moon-Circuit Hacker", "Wanderer's Intervention"],
+    'solutions': ["Moon-Circuit Hacker"]
+}
+
+neo_medium_pick_3 = {
+    'context': ["Virus Beetle"],
+    'choices': ["Kaito's Pursuit", "Mnemonic Sphere"],
+    'solutions': ["Kaito's Pursuit"]
+}
+
+neo_hard_pick_1 = {
+    'context': ["Moon-Circuit Hacker"],
+    'choices': ["Network Disruptor", "Spirited Companion"],
+    'solutions': ["Network Disruptor"]
+}
+
+neo_hard_pick_2 = {
+    'context': ["Jukai Naturalist"],
+    'choices': ["Kami of Transience", "March of Otherworldly Light"],
+    'solutions': ["Kami of Transience"]
+}
+
+NEO_draft_puzzles = [neo_easy_pick_1, neo_easy_pick_2, neo_easy_pick_3,
+                     neo_medium_pick_1, neo_medium_pick_2, neo_medium_pick_3,
+                     neo_hard_pick_1, neo_hard_pick_2]
 
 # endregion
