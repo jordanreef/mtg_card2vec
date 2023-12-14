@@ -90,12 +90,19 @@ def train_card2vec_embedding(set_size, embedding_dim, set,                      
     print("Loading and splitting data...")
 
     # Target cards (i.e. card vector being learned per iteration)
-    targets = training_corpus[:, 0].to(device)
+    # targets = training_corpus[:, 0].to(device)
+    # targets = training_corpus[:, 0]
 
     # Context cards -- Need to one-hot encode contexts for use in CE Loss
-    contexts = one_hot(training_corpus[:, 1].to(dtype=torch.int64)).to(device, dtype=torch.float)
+    # contexts = one_hot(training_corpus[:, 1].to(dtype=torch.int64)).to(device, dtype=torch.float)
+    # contexts = one_hot(training_corpus[:, 1].to(dtype=torch.int64))
 
-    dataset = TensorDataset(targets, contexts)
+    # dataset = TensorDataset(targets, contexts)
+
+    dataset = TensorDataset(
+        training_corpus[:, 0],  # Targets
+        one_hot(training_corpus[:, 1].to(dtype=torch.int64)).to(dtype=torch.float)  # Contexts
+    )
 
     # Train-test split
     train_size = int(0.9 * len(dataset))
@@ -151,8 +158,8 @@ def train_card2vec_embedding(set_size, embedding_dim, set,                      
 
         for it, batch in enumerate(train_loader):
             # Split targets and contexts -- convert one-hot representations to appropriate types for calcs
-            targets = batch[0]
-            contexts = batch[1]
+            targets = batch[0].to(device)
+            contexts = batch[1].to(device)
 
             optimizer.zero_grad()
             out = model(targets)
@@ -170,8 +177,8 @@ def train_card2vec_embedding(set_size, embedding_dim, set,                      
 
         with torch.no_grad():
             for it, batch in enumerate(val_loader):
-                targets = batch[0]
-                context = batch[1]
+                targets = batch[0].to(device)
+                context = batch[1].to(device)
 
                 val_out = model(targets)
                 val_loss += criterion(val_out, context).item()
@@ -203,8 +210,8 @@ def train_card2vec_embedding(set_size, embedding_dim, set,                      
     with torch.no_grad():
         test_loss = 0.0
         for it, batch in enumerate(test_loader):
-            targets = batch[0]
-            contexts = batch[1]
+            targets = batch[0].to(device)
+            contexts = batch[1].to(device)
 
             test_out = model(targets)
             test_loss += criterion(test_out, contexts).item()

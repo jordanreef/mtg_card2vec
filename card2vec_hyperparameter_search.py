@@ -53,6 +53,7 @@ def gather_hyperparam_run_metrics(set, card_names, eval_dir, loss_dir, weight_di
         eval_dir (str)        : relative path prefix to pairwise evals
         loss_dir (str)        : relative path prefix to loss curves
         weight_dir (str)      : relative path prefix to output weight tensors
+
         sims (list<tuple>)    : list of card-name tuples in the set, considered 'similar' by a human
         dissims (list<tuple>) : list of card-name tuples in the set, considered 'dissimilar' by a human
 

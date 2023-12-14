@@ -11,6 +11,11 @@ import matplotlib.pyplot as plt
 from itertools import combinations
 
 from sklearn.manifold import TSNE
+from sklearn.cluster import KMeans, DBSCAN
+from sklearn.metrics import pairwise_distances
+from sklearn.metrics.pairwise import cosine_similarity
+
+from data_preprocessing.seventeen_lands_preprocessor import NAME_2_ID, ID_2_NAME
 
 
 class Card2VecEmbeddingEval(object):
@@ -187,3 +192,125 @@ class Card2VecEmbeddingEval(object):
             plt.show()
 
         plt.close()
+
+    def draft_pick(self, context, choices, winrates, wr_lower=0.2, wr_upper=0.7,
+                   eval_type='additive', cluster_algo='centroid', k=None):
+        """
+        Make a draft pick! Chooses a card from among choices that maximizes the cosine similarity to a centroid
+        calculated from all currently selected cards (the 'context'). These similarities are weighted by the overall
+        power-level (winrate statistics) of each card.
+
+        The winrate statistics are turned into a normalized range based on the wr_lower and wr_upper params.
+
+        Arguments:
+            context (list)  : list of cards (indices in the embedding) representing current card picks
+            choices (list)  : list of cards (indices) -- learner chooses the best of these for their deck
+            winrates (list) : winrate statistics scraped from 17Lands -- used as a prior weighting for card selection
+
+            wr_lower (float) : Lower bound of the winrate normalization range
+            wr_upper (float) : Upper bound of the winrate normalization range
+
+            eval_type (str) : One of { additive, multiplicative, no_embed, no_winrate }
+                              Determines the calculation used to finally make the draft pick:
+                                - additive       : adds the similarity metric to the winrate metric
+                                - multiplicative : multiplies the similarity metric by the winrate metric
+                                - no_embed       : picks based on raw winrate statistics
+                                - no_winrate     : picks based only on the embedding similarity
+
+            cluster_algo (str) : One of { centroid, k_means, db_scan }
+                                 Which algorithm to use when generating clusters. Either naiive centroid, k_means, db_scan
+
+            k (int) : Choice of k (if using k_means cluster_algo)
+
+        Return:
+            choice (int) : index of chosen card within the embedding
+        """
+        if cluster_algo == 'k_means':
+            if k is None:
+                raise ValueError("Need to specify value for param 'k' when using cluster_algo == 'k_means'")
+
+            # Don't use more clusters than there are context vectors
+            if k > len(context):
+                k = len(context)
+
+        ctx_idxs = [self.card_names[0][name] for name in context]
+        choice_idxs = [self.card_names[0][name] for name in choices]
+
+        sims = None  # similarities determined by clustering algorithm
+        if cluster_algo == 'centroid':  # naiive centroid ______________________________________________________________
+            # Single centroid of context
+            ctx_embeddings = torch.stack([F.embedding(torch.tensor(idx).to(self.device), weight=self.embed_weights)
+                                          for idx in ctx_idxs]).to(self.device)
+            ctx_centroid = torch.mean(ctx_embeddings, dim=0)
+
+            choice_embeddings = [F.embedding(torch.tensor(idx).to(self.device), weight=self.embed_weights).to(self.device)
+                                 for idx in choice_idxs]
+
+            # Get the similarity between the context centroid and each choice -- these are logits
+            sims = torch.tensor([F.cosine_similarity(ctx_centroid, ce, dim=0).item()
+                                 for ce in choice_embeddings]).to(self.device)
+
+        elif cluster_algo == 'k_means':  # k_means _____________________________________________________________________
+            # K-Means on context
+            ctx_embeddings = torch.stack([F.embedding(torch.tensor(idx).to(self.device), weight=self.embed_weights)
+                                          for idx in ctx_idxs]).cpu().numpy()
+
+            kmeans = KMeans(n_clusters=k, random_state=2024, n_init=20, algorithm='elkan')
+            kmeans.fit(ctx_embeddings)
+
+            # Find the largest cluster
+            biggest_cluster_idx = np.argmax(np.bincount(kmeans.labels_))
+            big_cluster = kmeans.cluster_centers_[biggest_cluster_idx]
+
+            # Get the embeddings for each card in the choices
+            choice_embeddings = [F.embedding(torch.tensor(idx).to(self.device), weight=self.embed_weights).cpu().numpy()
+                                 for idx in choice_idxs]
+
+            # # For each choice, get its highest similarity to any of the k centroids -- these are logits
+            # sims = np.min(pairwise_distances(choice_embeddings, kmeans.cluster_centers_, metric='cosine'), axis=1)
+
+            # Cosine similarity
+            sims = [np.dot(ce, big_cluster) / (np.linalg.norm(ce) * np.linalg.norm(big_cluster))
+                    for ce in choice_embeddings]
+            sims = torch.tensor(sims).to(self.device)  # Pass back to torch
+        else:
+            raise ValueError("Invalid cluster_algo passed to draft_pick()")
+
+        # ______________________________________________________________________________________________________________
+
+        # Take a Softmax over the similarities
+        sims = F.softmax(sims, dim=0)
+
+        # Preprocess card winrates
+        _wrs = [(self.card_names[NAME_2_ID][tup[0]], tup[1]) for tup in winrates]
+        _wrs = sorted(_wrs, key=lambda x: x[0])
+        _wr_mean = np.mean([tup[1] for tup in _wrs])  # Avg winrate -- used as a default for missing datapoints later
+                                                      # This mostly applies to basic lands
+
+        # Some datapoints are missing from winrate data, so we need to fill in the gap (basic lands, mostly)
+        wrs = [None for _ in range(len(self.embed_weights))]
+        for emb_idx in range(len(self.embed_weights)):
+            if emb_idx in [tup[0] for tup in _wrs]:
+                wrs[emb_idx] = next((tup[1] for tup in _wrs if tup[0] == emb_idx))
+            else:
+                wrs[emb_idx] = _wr_mean
+        wrs = torch.tensor(wrs).to(self.device)
+
+        # Normalize card winrates to supplied range
+        wr_max = torch.max(wrs)
+        wr_min = torch.min(wrs)
+        wrs = wr_lower + (wrs - wr_min) * (wr_upper - wr_lower) / (wr_max - wr_min)
+
+        if eval_type == "additive":
+            normalized_sims = torch.tensor([sims[i] + wrs[choice_idxs[i]] for i in range(len(choices))]).to(self.device)
+        elif eval_type == "multiplicative":
+            normalized_sims = torch.tensor([sims[i] * wrs[choice_idxs[i]] for i in range(len(choices))]).to(self.device)
+        elif eval_type == "no_embed":
+            normalized_sims = torch.tensor([wrs[choice_idxs[i]] for i in range(len(choices))]).to(self.device)
+        elif eval_type == "no_winrate":
+            normalized_sims = sims
+        else:
+            raise ValueError('Invalid eval_type passed to Card2VecEmbeddingEval.draft_pick()')
+
+        # Return the embedding index of the best pick
+        return choice_idxs[torch.argmax(normalized_sims).item()]
